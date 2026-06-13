@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+<title>The Cognitive Redline</title>
+<style>
+  :root { --accent:#38bdf8; --line:rgba(148,163,184,0.14); }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    color:#e2e8f0; width:470px; height:760px; overflow:hidden;
+    background:radial-gradient(700px 360px at 85% -10%,rgba(56,189,248,0.12),transparent 60%),
+               radial-gradient(600px 340px at 0% 110%,rgba(99,102,241,0.12),transparent 55%),#0b1120;
+    transition:background 1.2s ease;
+  }
+  body.redline {
+    background:radial-gradient(700px 360px at 85% -10%,rgba(251,146,60,0.22),transparent 60%),
+               radial-gradient(600px 360px at 5% 110%,rgba(239,68,68,0.2),transparent 55%),#140d08;
+  }
+  .wrap { height:760px; overflow-y:auto; padding:14px; }
+  .wrap::-webkit-scrollbar { width:8px; }
+  .wrap::-webkit-scrollbar-thumb { background:rgba(148,163,184,0.25); border-radius:99px; }
+  .card { background:linear-gradient(180deg,rgba(30,41,59,0.55),rgba(15,23,42,0.5));
+          border:1px solid var(--line); border-radius:16px; padding:12px; margin-bottom:12px; }
+  body.redline .card { border-color:rgba(251,146,60,0.3); }
+  .row { display:flex; align-items:center; gap:8px; }
+  .between { justify-content:space-between; }
+  h1 { font-size:15px; font-weight:800; }
+  h2 { font-size:12px; font-weight:600; color:#cbd5e1; }
+  .mut { color:#64748b; } .mono { font-family:ui-monospace,'SF Mono',Menlo,monospace; }
+  .tiny { font-size:10px; } .sm { font-size:11px; } .xs { font-size:12px; }
+  .badge { font-size:10px; padding:3px 8px; border-radius:99px; border:1px solid; }
+  .green { color:#34d399; border-color:rgba(52,211,153,0.4); background:rgba(52,211,153,0.12); }
+  .pill-priv { background:linear-gradient(90deg,rgba(34,197,94,0.15),rgba(56,189,248,0.15));
+               border:1px solid rgba(34,197,94,0.35); color:#6ee7b7; }
+  button { font-family:inherit; cursor:pointer; border:none; border-radius:9px; color:#e2e8f0; }
+  .btn-sim { background:linear-gradient(90deg,#ef4444,#f97316); font-weight:700; font-size:11px;
+             padding:7px 10px; box-shadow:0 4px 14px rgba(239,68,68,0.3); }
+  .btn-sim:hover { opacity:.9; }
+  .btn-ghost { background:transparent; border:1px solid var(--line); font-size:11px; padding:7px 10px; }
+  .btn-ghost:hover { border-color:#64748b; }
+  .gaugewrap { position:relative; width:160px; height:160px; }
+  .gaugewrap .val { position:absolute; inset:0; display:flex; flex-direction:column;
+                    align-items:center; justify-content:center; }
+  .gaugewrap .num { font-size:42px; font-weight:800; line-height:1; }
+  .metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+  .metric { background:rgba(15,23,42,0.5); border:1px solid var(--line); border-radius:10px; padding:7px 9px; }
+  .metric .k { font-size:9px; color:#64748b; letter-spacing:.05em; }
+  .metric .v { font-size:17px; font-weight:700; }
+  .slider { display:flex; flex-direction:column; gap:3px; margin-bottom:9px; }
+  .slider label { display:flex; justify-content:space-between; font-size:11px; color:#94a3b8; }
+  input[type=range] { -webkit-appearance:none; height:5px; border-radius:99px;
+                      background:rgba(148,163,184,0.2); outline:none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:15px; height:15px;
+      border-radius:50%; background:var(--accent); border:2px solid #0b1120;
+      box-shadow:0 0 8px rgba(56,189,248,0.6); }
+  input[type=number],textarea,input[type=text],select {
+      background:rgba(15,23,42,0.6); border:1px solid var(--line); border-radius:8px;
+      color:#e2e8f0; padding:6px 8px; font-size:12px; font-family:inherit; width:100%; outline:none; }
+  textarea { resize:none; height:54px; font-family:ui-monospace,monospace; }
+  input:focus,textarea:focus,select:focus { border-color:var(--accent); }
+  .console { font-family:ui-monospace,'SF Mono',monospace; font-size:10.5px; line-height:1.5;
+             background:rgba(7,11,21,0.7); border-radius:10px; padding:8px; height:120px;
+             overflow-y:auto; border:1px solid var(--line); }
+  .console::-webkit-scrollbar { width:6px; }
+  .console::-webkit-scrollbar-thumb { background:rgba(148,163,184,0.25); }
+  .fault { display:flex; gap:6px; align-items:center; background:rgba(239,68,68,0.1);
+           border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:5px 8px; margin-top:6px;
+           animation:flash 1.2s infinite; }
+  @keyframes flash { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4);} 50%{box-shadow:0 0 16px 1px rgba(239,68,68,.5);} }
+  .checkin { width:36px; height:36px; border-radius:10px; border:1px solid var(--line);
+             background:transparent; font-size:16px; }
+  .checkin:hover { transform:scale(1.1); }
+  .overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+             background:rgba(0,0,0,0.78); backdrop-filter:blur(8px); z-index:50; text-align:center; padding:24px; }
+  .overlay.on { display:flex; }
+  .orb { width:120px; height:120px; border-radius:50%; margin:0 auto 22px;
+         background:radial-gradient(circle,rgba(56,189,248,0.5),rgba(99,102,241,0.4));
+         display:flex; align-items:center; justify-content:center; animation:breathe 8s ease-in-out infinite; }
+  @keyframes breathe { 0%,100%{transform:scale(.7);box-shadow:0 0 30px 6px rgba(56,189,248,.3);}
+                       50%{transform:scale(1.2);box-shadow:0 0 60px 18px rgba(56,189,248,.5);} }
+  .intervention { position:fixed; left:14px; right:14px; bottom:14px; z-index:40; display:none;
+                  background:#0f172a; border:1px solid var(--line); border-radius:18px; padding:12px;
+                  box-shadow:0 10px 40px rgba(0,0,0,.5); animation:slideup .4s ease; }
+  @keyframes slideup { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:none;} }
+  .avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+            background:linear-gradient(135deg,#34d399,#38bdf8); font-size:16px; flex-shrink:0; }
+  .bubble { background:#1e293b; border-radius:14px 14px 14px 4px; padding:8px 10px; font-size:12px; }
+  .dot { width:7px; height:7px; border-radius:50%; animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+  .perm { font-size:10px; color:#fbbf24; margin-top:6px; display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="row between" style="margin-bottom:12px;">
+    <div class="row">
+      <div style="width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#38bdf8,#6366f1);">🧠</div>
+      <div>
+        <h1>Cognitive <span style="color:#f87171;">Redline</span></h1>
+        <div class="tiny mono mut">native menu-bar profiler · v2.0</div>
+      </div>
+    </div>
+    <span class="badge pill-priv">🔒 100% Local</span>
+  </div>
+
+  <div class="row" style="gap:8px;margin-bottom:12px;">
+    <button class="btn-sim" id="simBtn" style="flex:1;">⚡ SIMULATE BURNOUT</button>
+    <button class="btn-ghost" id="resetBtn">↺ Reset</button>
+  </div>
+
+  <!-- Gauge + status -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:6px;">
+      <h2>Cognitive Load Index</h2>
+      <span class="badge green mono" id="statusBadge">OPTIMAL</span>
+    </div>
+    <div class="row" style="gap:14px;">
+      <div class="gaugewrap">
+        <canvas id="gauge" width="160" height="160"></canvas>
+        <div class="val"><div class="num" id="cliNum">0</div><div class="tiny mono mut">CLI / 100</div></div>
+      </div>
+      <div style="flex:1;">
+        <div id="headline" style="font-weight:700;font-size:14px;color:#34d399;">State: Healthy</div>
+        <div class="sm mut" id="sub" style="margin-top:3px;line-height:1.4;">Operating within safe parameters.</div>
+        <div class="metrics">
+          <div class="metric"><div class="k mono">CONTEXT SWITCHES</div><div class="v mono" id="mSwitch">0</div></div>
+          <div class="metric"><div class="k mono">DELETE RATIO</div><div class="v mono" id="mDelete">0%</div></div>
+          <div class="metric"><div class="k mono">SESSION (min)</div><div class="v mono" id="mSession">0</div></div>
+          <div class="metric"><div class="k mono">IDLE EVENTS</div><div class="v mono" id="mIdle">0</div></div>
+        </div>
+      </div>
+    </div>
+    <div id="faults"></div>
+  </div>
+
+  <!-- Model -->
+  <div class="card">
+    <h2 style="margin-bottom:8px;">Load Model — Transparent Formula</h2>
+    <div class="tiny mono" style="background:rgba(7,11,21,.6);border:1px solid var(--line);border-radius:8px;padding:6px;margin-bottom:10px;color:#94a3b8;">
+      CLI = (complexity × workHrs × assignments × deadline × stress) ÷ max(sleep,1) → norm 0–100
+    </div>
+    <div id="sliders"></div>
+    <div class="slider">
+      <label>Assignment Count <span class="mono" style="color:var(--accent);" id="assignVal">3</span></label>
+      <input type="number" id="assignNum" min="0" max="30" value="3" />
+    </div>
+  </div>
+
+  <!-- Mini editor for keystroke telemetry -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:6px;">
+      <h2>Scratch Pad</h2><span class="tiny mono mut">keystroke rhythm capture</span>
+    </div>
+    <textarea id="note" placeholder="Type here — delete-ratio telemetry is captured while focused..."></textarea>
+  </div>
+
+  <!-- Console -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:6px;">
+      <h2>Live Telemetry Stream</h2>
+      <span class="tiny mono mut"><span id="evtCount">0</span> events · system + local</span>
+    </div>
+    <div class="console" id="console"></div>
+    <div class="perm" id="permNote">⚠ Grant Accessibility to System Settings ▸ Privacy ▸ Accessibility for live context-switch tracking.</div>
+  </div>
+
+  <!-- Check-in + contact -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:8px;">
+      <h2>Daily Check-in</h2><span class="tiny mut">under 10 seconds</span>
+    </div>
+    <div class="row" style="gap:8px;margin-bottom:12px;">
+      <button class="checkin" id="ci-green" data-c="green">🟢</button>
+      <button class="checkin" id="ci-yellow" data-c="yellow">🟡</button>
+      <button class="checkin" id="ci-red" data-c="red">🔴</button>
+      <span class="sm mut" id="ciLabel" style="margin-left:6px;">Tap your status</span>
+    </div>
+    <h2 style="margin-bottom:6px;">Trusted Contact</h2>
+    <div class="row" style="gap:6px;">
+      <input type="text" id="contactName" placeholder="Name (e.g. Mom, Sam — RA)" style="flex:2;" />
+      <select id="contactRel" style="flex:1;">
+        <option>Friend</option><option>Sibling</option><option>Parent</option><option>RA</option><option>Mentor</option>
+      </select>
+    </div>
+    <div class="tiny pill-priv" style="border-radius:8px;padding:5px 8px;margin-top:8px;">
+      🔒 They only ever see a color — never your notes, telemetry, sleep, or workload.
+    </div>
+  </div>
+
+  <div class="tiny mono mut" style="text-align:center;padding-bottom:8px;">Share the light, not the data.</div>
+</div>
+
+<!-- Decompression overlay -->
+<div class="overlay" id="decomp">
+  <div>
+    <div class="orb"><span class="sm mono" id="breathText">Breathe in…</span></div>
+    <h1 style="color:#fbbf24;font-size:18px;margin-bottom:6px;">SYSTEM RECOVERY REQUIRED</h1>
+    <div class="sm mut" style="margin-bottom:16px;line-height:1.5;">Cognitive load exceeds safe operating threshold.<br/>Please pause and reset.</div>
+    <div class="mono" style="font-size:46px;font-weight:800;"><span id="decompCount">30</span><span style="font-size:20px;color:#64748b;">s</span></div>
+    <div class="tiny mono mut" style="margin:6px 0 16px;">decompression block · mandatory cooldown</div>
+    <button class="btn-ghost" id="decompBtn" disabled style="opacity:.4;">Resume (locked)</button>
+  </div>
+</div>
+
+<!-- Intervention card -->
+<div class="intervention" id="intervention">
+  <div class="row between" style="margin-bottom:8px;">
+    <div class="row tiny mut"><span class="dot" style="background:#34d399;"></span> Messages · now</div>
+    <button class="btn-ghost" id="closeIntervention" style="padding:2px 8px;">×</button>
+  </div>
+  <div class="row" style="align-items:flex-start;gap:8px;">
+    <div class="avatar">💙</div>
+    <div style="flex:1;">
+      <div class="tiny mut" style="margin-bottom:3px;">Cognitive Redline · auto-alert</div>
+      <div class="bubble" id="interventionMsg">Atharv may need support today. Consider checking in.</div>
+      <div class="tiny pill-priv" style="display:inline-block;border-radius:99px;padding:2px 8px;margin-top:6px;">🔒 No private data shared</div>
+    </div>
+  </div>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
