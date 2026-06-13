@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Cognitive Redline — Burnout Diagnostics</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+      }
+    }
+  }
+</script>
+<style>
+  :root {
+    --bg-0: #0b1120;
+    --bg-1: #0f172a;
+    --bg-2: #1e293b;
+    --accent: #38bdf8;
+    --line: rgba(148,163,184,0.12);
+  }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(56,189,248,0.10), transparent 60%),
+      radial-gradient(1000px 500px at 0% 110%, rgba(99,102,241,0.10), transparent 55%),
+      var(--bg-0);
+    color: #e2e8f0;
+    transition: background 1.4s ease, filter 0.6s ease;
+    overflow-x: hidden;
+  }
+  /* ===== REDLINE AMBIENT MODE ===== */
+  body.redline {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(251,146,60,0.22), transparent 60%),
+      radial-gradient(1000px 600px at 10% 110%, rgba(239,68,68,0.20), transparent 55%),
+      #140d08;
+  }
+  body.redline .glass { border-color: rgba(251,146,60,0.30) !important; }
+  body.redline .ambient-accent { color: #fb923c !important; }
+
+  .glass {
+    background: linear-gradient(180deg, rgba(30,41,59,0.55), rgba(15,23,42,0.55));
+    border: 1px solid var(--line);
+    backdrop-filter: blur(12px);
+  }
+  .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 999px; }
+  .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+  /* range sliders */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    height: 6px; border-radius: 999px;
+    background: rgba(148,163,184,0.2);
+    outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid #0b1120;
+    box-shadow: 0 0 0 1px rgba(56,189,248,0.5), 0 0 12px rgba(56,189,248,0.5);
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+  .pulse-dot { animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+  .fault-flash { animation: faultflash 1.2s infinite; }
+  @keyframes faultflash { 0%,100%{ box-shadow: 0 0 0 0 rgba(239,68,68,0.5);} 50%{ box-shadow:0 0 22px 2px rgba(239,68,68,0.55);} }
+
+  .console-line { animation: linein 0.35s ease; }
+  @keyframes linein { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+
+  /* breathing orb */
+  .breathe {
+    animation: breathe 8s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(0.7); box-shadow: 0 0 40px 10px rgba(56,189,248,0.3); }
+    50% { transform: scale(1.25); box-shadow: 0 0 90px 30px rgba(56,189,248,0.55); }
+  }
+
+  .fade-in { animation: fadein 0.5s ease; }
+  @keyframes fadein { from {opacity:0;} to{opacity:1;} }
+  .slide-up { animation: slideup 0.5s cubic-bezier(.2,.8,.2,1); }
+  @keyframes slideup { from {opacity:0; transform: translateY(24px);} to{opacity:1; transform:none;} }
+
+  .locked { filter: blur(3px) saturate(0.6); pointer-events: none; user-select: none; transition: filter 0.6s; }
+
+  .badge-grad {
+    background: linear-gradient(90deg, rgba(34,197,94,0.15), rgba(56,189,248,0.15));
+    border: 1px solid rgba(34,197,94,0.35);
+  }
+  .grad-text {
+    background: linear-gradient(90deg, #38bdf8, #818cf8 60%, #c084fc);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tab-active { background: rgba(56,189,248,0.12); color: #38bdf8; border-color: rgba(56,189,248,0.4) !important; }
+</style>
+</head>
+<body class="font-sans antialiased min-h-screen">
+
+<!-- ======================= ONBOARDING ======================= -->
+<div id="onboarding" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#070b15]/95 backdrop-blur-md p-6">
+  <div class="max-w-2xl w-full glass rounded-2xl p-8 md:p-10 slide-up shadow-2xl">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-400 to-indigo-500 flex items-center justify-center text-xl">🧠</div>
+      <div>
+        <h1 class="text-2xl font-extrabold tracking-tight">The Cognitive <span class="text-red-400">Redline</span></h1>
+        <p class="text-sm text-slate-400">A real-time performance profiler for the human brain.</p>
+      </div>
+    </div>
+
+    <p class="text-slate-300 leading-relaxed mb-5">
+      Most wellness apps ask you how you feel. <span class="text-sky-300 font-medium">We measure it.</span>
+      The Cognitive Redline passively profiles your work behavior — like Chrome DevTools for your focus —
+      and detects burnout <em>before</em> you crash.
+    </p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+      <div class="rounded-xl border border-slate-700/60 p-3">
+        <div class="text-sky-300 text-lg font-bold">Profile</div>
+        <div class="text-xs text-slate-400 mt-1">Passive telemetry tracks focus, edits & micro-stuttering.</div>
+      </div>
+      <div class="rounded-xl border border-slate-700/60 p-3">
+        <div class="text-amber-300 text-lg font-bold">Diagnose</div>
+        <div class="text-xs text-slate-400 mt-1">A transparent Cognitive Load Index with live fault codes.</div>
+      </div>
+      <div class="rounded-xl border border-slate-700/60 p-3">
+        <div class="text-emerald-300 text-lg font-bold">Intervene</div>
+        <div class="text-xs text-slate-400 mt-1">Close the loop with a trusted contact — privately.</div>
+      </div>
+    </div>
+
+    <div class="badge-grad rounded-xl px-4 py-3 flex items-center gap-3 mb-7">
+      <span class="text-emerald-400 text-lg">🔒</span>
+      <div class="text-sm">
+        <div class="font-semibold text-emerald-300">100% Local Processing</div>
+        <div class="text-slate-400 text-xs">No accounts · No backend · No data leaves your device.</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <input id="userName" placeholder="Your name (for demo intervention card)" value="Atharv"
+        class="flex-1 bg-slate-900/70 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:border-sky-400 outline-none" />
+      <button onclick="startApp()" class="px-6 py-2.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 font-semibold hover:opacity-90 transition shadow-lg shadow-sky-500/20">
+        Enter Dashboard →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= TOP BAR ======================= -->
+<header class="sticky top-0 z-40 glass border-b">
+  <div class="max-w-[1700px] mx-auto px-4 py-2.5 flex items-center gap-4 flex-wrap">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-indigo-500 flex items-center justify-center text-sm">🧠</div>
+      <div class="leading-tight">
+        <div class="font-bold text-sm">Cognitive <span class="text-red-400">Redline</span></div>
+        <div class="text-[10px] text-slate-500 font-mono">brain.profiler // v2.0</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 ml-1">
+      <span id="systemStatusPill" class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span> SYSTEM NOMINAL
+      </span>
+    </div>
+
+    <div class="flex-1"></div>
+
+    <!-- Daily check-in -->
+    <div class="flex items-center gap-1.5">
+      <span class="text-[11px] text-slate-400 mr-1 hidden md:inline">Daily check-in:</span>
+      <button onclick="setCheckin('green')" id="ci-green" class="checkin-btn w-8 h-8 rounded-lg border border-slate-700 hover:scale-110 transition text-base" title="Good">🟢</button>
+      <button onclick="setCheckin('yellow')" id="ci-yellow" class="checkin-btn w-8 h-8 rounded-lg border border-slate-700 hover:scale-110 transition text-base" title="Struggling">🟡</button>
+      <button onclick="setCheckin('red')" id="ci-red" class="checkin-btn w-8 h-8 rounded-lg border border-slate-700 hover:scale-110 transition text-base" title="Overwhelmed">🔴</button>
+    </div>
+
+    <button onclick="openContactModal()" class="text-[11px] px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-500 transition flex items-center gap-1.5">
+      👤 <span id="contactLabel">Trusted Contact</span>
+    </button>
+
+    <span class="badge-grad rounded-full px-3 py-1.5 text-[11px] flex items-center gap-1.5">
+      🔒 <span class="font-semibold text-emerald-300">100% Local</span>
+    </span>
+
+    <button onclick="simulateBurnout()" class="text-[12px] font-bold px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 hover:opacity-90 transition shadow-lg shadow-red-500/20 fault-flash">
+      ⚡ SIMULATE BURNOUT EVENT
+    </button>
+    <button onclick="resetCalm()" class="text-[11px] px-3 py-2 rounded-lg border border-slate-700 hover:border-slate-500 transition">↺ Reset</button>
+  </div>
+</header>
+
+<!-- ======================= MAIN SPLIT ======================= -->
+<main class="max-w-[1700px] mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+  <!-- ============ LEFT: WORKSPACE ============ -->
+  <section class="glass rounded-2xl overflow-hidden flex flex-col" style="min-height:560px">
+    <div class="px-4 py-3 border-b border-slate-700/40 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="ambient-accent text-sky-400">▮</span>
+        <h2 class="font-semibold text-sm">Workspace & Telemetry Engine</h2>
+      </div>
+      <span class="text-[10px] font-mono text-slate-500">capturing behavior · passive</span>
+    </div>
+
+    <!-- tabs -->
+    <div class="flex gap-1 px-3 pt-3" id="wsTabs">
+      <button data-tab="notes" class="ws-tab tab-active text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition">📝 Notes</button>
+      <button data-tab="tasks" class="ws-tab text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition text-slate-400">✅ Assignments</button>
+      <button data-tab="read" class="ws-tab text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition text-slate-400">📖 Reading</button>
+    </div>
+
+    <div class="p-3 flex-1 flex flex-col">
+      <!-- NOTES -->
+      <div data-panel="notes" class="ws-panel flex-1 flex flex-col">
+        <textarea id="noteArea" placeholder="Start typing your notes... we silently profile keystroke rhythm, deletions, and focus.&#10;&#10;Try: switch tabs, mash backspace, or go idle — watch the telemetry console below."
+          class="flex-1 w-full resize-none bg-slate-900/50 border border-slate-700/60 rounded-xl p-4 text-sm leading-relaxed font-mono focus:border-sky-400 outline-none scroll-thin"></textarea>
+      </div>
+
+      <!-- TASKS -->
+      <div data-panel="tasks" class="ws-panel flex-1 hidden">
+        <div class="flex gap-2 mb-3">
+          <input id="taskInput" placeholder="New assignment..." class="flex-1 bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-sky-400" />
+          <button id="addTaskBtn" onclick="addTask()" class="px-4 py-2 rounded-lg bg-sky-500/90 hover:bg-sky-500 text-sm font-semibold transition">+ Add Task</button>
+        </div>
+        <div id="taskList" class="space-y-2 overflow-y-auto scroll-thin" style="max-height:380px"></div>
+      </div>
+
+      <!-- READING -->
+      <div data-panel="read" class="ws-panel flex-1 hidden overflow-y-auto scroll-thin pr-1" style="max-height:430px">
+        <article class="prose-invert text-sm text-slate-300 leading-relaxed space-y-3">
+          <h3 class="text-base font-bold text-slate-100">Cognitive Load Theory (excerpt)</h3>
+          <p>Working memory is finite. When intrinsic load (task difficulty) and extraneous load (poor environment) exceed capacity, performance collapses — often invisibly to the person experiencing it.</p>
+          <p>Behavioral signals leak this overload long before self-report does: increased deletion rates, context-switching, and motor micro-stuttering are well-documented correlates of fatigue and stress.</p>
+          <p>The goal of this workspace is not to test you — it is to <span class="text-sky-300">observe</span> you, the way a profiler observes a running program: non-invasively, continuously, and honestly.</p>
+          <p class="text-slate-500 text-xs">Scroll & read naturally — idle time and scroll behavior feed the engine too.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT: DIAGNOSTIC DASHBOARD ============ -->
+  <section class="flex flex-col gap-4">
+
+    <!-- GAUGE + STATUS -->
+    <div class="glass rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="ambient-accent text-sky-400">▮</span>
+          <h2 class="font-semibold text-sm">Cognitive Load Index</h2>
+        </div>
+        <span id="cliStatusBadge" class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">OPTIMAL</span>
+      </div>
+
+      <div class="flex items-center gap-5">
+        <div class="relative shrink-0" style="width:200px;height:200px">
+          <canvas id="gauge" width="200" height="200"></canvas>
+          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div id="cliValue" class="text-5xl font-extrabold tracking-tight">0</div>
+            <div class="text-[10px] font-mono text-slate-400 tracking-widest">CLI / 100</div>
+          </div>
+        </div>
+
+        <div class="flex-1 space-y-2">
+          <div id="cliHeadline" class="text-lg font-bold text-emerald-300">Cognitive state: Healthy</div>
+          <p id="cliSub" class="text-xs text-slate-400 leading-relaxed">All systems operating within safe parameters. Keep up the rhythm.</p>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <div class="rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2">
+              <div class="text-[10px] text-slate-500 font-mono">FOCUS LOSSES</div>
+              <div id="mFocus" class="text-lg font-bold font-mono">0</div>
+            </div>
+            <div class="rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2">
+              <div class="text-[10px] text-slate-500 font-mono">DELETE RATIO</div>
+              <div id="mDelete" class="text-lg font-bold font-mono">0%</div>
+            </div>
+            <div class="rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2">
+              <div class="text-[10px] text-slate-500 font-mono">SESSION (min)</div>
+              <div id="mSession" class="text-lg font-bold font-mono">0</div>
+            </div>
+            <div class="rounded-lg bg-slate-900/50 border border-slate-700/50 px-3 py-2">
+              <div class="text-[10px] text-slate-500 font-mono">STUTTER IDX</div>
+              <div id="mStutter" class="text-lg font-bold font-mono">0.0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FAULT CODES -->
+      <div id="faultPanel" class="mt-3 space-y-1.5 hidden"></div>
+    </div>
+
+    <!-- CLI MODEL INPUTS -->
+    <div id="modelCard" class="glass rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="ambient-accent text-sky-400">▮</span>
+          <h2 class="font-semibold text-sm">Load Model — Transparent Formula</h2>
+        </div>
+      </div>
+      <div class="font-mono text-[11px] bg-slate-900/60 border border-slate-700/50 rounded-lg p-2.5 mb-3 text-slate-300 overflow-x-auto">
+        CLI = (complexity × workHrs × assignments × deadline × stress) ÷ max(sleep, 1) → <span class="text-sky-300">normalized 0–100</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-x-5 gap-y-3">
+        <div class="slider-wrap" data-id="complexity" data-min="1" data-max="10"><label>Task Complexity</label></div>
+        <div class="slider-wrap" data-id="workHours" data-min="1" data-max="12"><label>Consecutive Work Hours</label></div>
+        <div class="slider-wrap" data-id="sleep" data-min="1" data-max="12"><label>Hours of Sleep</label></div>
+        <div class="slider-wrap" data-id="deadline" data-min="1" data-max="10"><label>Deadline Urgency</label></div>
+        <div class="slider-wrap" data-id="stress" data-min="1" data-max="10"><label>Stress Multiplier</label></div>
+        <div>
+          <label class="text-xs text-slate-400 flex justify-between mb-1">Assignment Count <span id="assignVal" class="font-mono text-sky-300">3</span></label>
+          <input id="assignNum" type="number" min="0" max="30" value="3" oninput="onAssignInput()" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-sky-400" />
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY CHART -->
+    <div class="glass rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="ambient-accent text-sky-400">▮</span>
+          <h2 class="font-semibold text-sm">Historical Session Load</h2>
+        </div>
+        <span class="text-[10px] font-mono text-slate-500">live · last 40 samples</span>
+      </div>
+      <div style="height:120px"><canvas id="historyChart"></canvas></div>
+    </div>
+
+  </section>
+</main>
+
+<!-- ======================= TELEMETRY CONSOLE ======================= -->
+<section class="max-w-[1700px] mx-auto px-4 pb-4">
+  <div class="glass rounded-2xl overflow-hidden">
+    <div class="px-4 py-2 border-b border-slate-700/40 flex items-center justify-between bg-slate-900/40">
+      <div class="flex items-center gap-2 font-mono text-xs">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500/80"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
+        <span class="ml-2 text-slate-400">live-telemetry-stream — console</span>
+      </div>
+      <div class="flex items-center gap-3 text-[10px] font-mono text-slate-500">
+        <span><span id="evtCount">0</span> events</span>
+        <button onclick="clearConsole()" class="hover:text-slate-300">clear</button>
+      </div>
+    </div>
+    <div id="console" class="font-mono text-[11px] leading-relaxed p-3 h-44 overflow-y-auto scroll-thin bg-[#070b15]/60"></div>
+  </div>
+</section>
+
+<!-- ======================= DECOMPRESSION MODAL ======================= -->
+<div id="decompModal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-black/70 backdrop-blur-lg p-6">
+  <div class="max-w-md w-full text-center fade-in">
+    <div class="mx-auto mb-8 w-40 h-40 rounded-full bg-gradient-to-br from-sky-400/40 to-indigo-500/40 breathe flex items-center justify-center">
+      <div id="breathText" class="font-mono text-sm text-sky-100">Breathe in…</div>
+    </div>
+    <h2 class="text-2xl font-extrabold mb-2 text-amber-300">SYSTEM RECOVERY REQUIRED</h2>
+    <p class="text-slate-300 text-sm mb-6 leading-relaxed">Cognitive load exceeds safe operating threshold.<br/>Please pause and reset. Your work is saved locally.</p>
+    <div class="text-6xl font-extrabold font-mono mb-2"><span id="decompCount">30</span><span class="text-2xl text-slate-500">s</span></div>
+    <div class="text-[11px] font-mono text-slate-500 mb-6">decompression block · mandatory cooldown</div>
+    <button id="decompSkip" onclick="closeDecomp()" class="text-xs px-4 py-2 rounded-lg border border-slate-600 text-slate-400 opacity-40 cursor-not-allowed" disabled>Resume (locked)</button>
+  </div>
+</div>
+
+<!-- ======================= INTERVENTION CARD ======================= -->
+<div id="interventionCard" class="fixed bottom-6 right-6 z-[80] hidden">
+  <div class="slide-up w-80 rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden">
+    <div class="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2 flex items-center justify-between border-b border-slate-700">
+      <div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span> Messages · now
+      </div>
+      <button onclick="document.getElementById('interventionCard').style.display='none'" class="text-slate-500 hover:text-slate-300 text-lg leading-none">×</button>
+    </div>
+    <div class="p-4">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-sky-500 flex items-center justify-center text-lg shrink-0">💙</div>
+        <div class="flex-1">
+          <div class="text-xs text-slate-400 mb-0.5">Cognitive Redline · auto-alert</div>
+          <div class="bg-slate-800 rounded-2xl rounded-tl-sm px-3 py-2.5 text-sm">
+            <span id="interventionMsg">Atharv may need support today. Consider checking in.</span>
+          </div>
+          <div class="mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-2 py-0.5">
+            🔒 No private data shared — share the light, not the data.
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button class="flex-1 bg-sky-500 hover:bg-sky-400 text-sm font-semibold py-2 rounded-xl transition">Check in 💬</button>
+        <button class="px-3 bg-slate-800 hover:bg-slate-700 text-sm py-2 rounded-xl transition">Later</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= CONTACT MODAL ======================= -->
+<div id="contactModal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-black/70 backdrop-blur-md p-6">
+  <div class="max-w-md w-full glass rounded-2xl p-6 slide-up">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-lg">Configure Trusted Contact</h2>
+      <button onclick="document.getElementById('contactModal').style.display='none'" class="text-slate-500 hover:text-slate-300 text-xl">×</button>
+    </div>
+    <p class="text-xs text-slate-400 mb-4 leading-relaxed">This person becomes your safety net. When you hit a cognitive redline, they get a gentle nudge — <span class="text-emerald-300">never your notes, telemetry, sleep, or workload.</span> Only a color.</p>
+    <label class="text-xs text-slate-400">Name</label>
+    <input id="contactName" placeholder="e.g. Mom, Sam (RA), Jordan" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-3 mt-1 outline-none focus:border-sky-400" />
+    <label class="text-xs text-slate-400">Relationship</label>
+    <select id="contactRel" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-4 mt-1 outline-none focus:border-sky-400">
+      <option>Friend</option><option>Sibling</option><option>Parent</option><option>RA</option><option>Mentor</option>
+    </select>
+    <div class="badge-grad rounded-lg px-3 py-2 text-[11px] text-emerald-300 mb-4">🔒 Stored locally. Mock notification only — no message is actually sent.</div>
+    <button onclick="saveContact()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 font-semibold py-2.5 rounded-lg hover:opacity-90 transition">Save Contact</button>
+  </div>
+</div>
+
+<footer class="max-w-[1700px] mx-auto px-4 pb-8 text-center text-[11px] text-slate-600 font-mono">
+  The Cognitive Redline · 100% local processing · no data leaves your device · "Share the light, not the data."
+</footer>
+
+<script>
+/* =========================================================
+   STATE
+========================================================= */
+const STATE = {
+  userName: 'Atharv',
+  contact: JSON.parse(localStorage.getItem('cr_contact') || 'null'),
+  model: JSON.parse(localStorage.getItem('cr_model') || 'null') || {
+    complexity: 5, workHours: 3, sleep: 7, deadline: 4, stress: 4, assignments: 3
+  },
+  telemetry: {
+    focusLosses: 0,
+    keystrokes: 0,
+    deletes: 0,
+    lastFocusOut: 0,
+    idleEvents: 0,
+    stutterIdx: 0,
+    sessionStart: Date.now(),
+  },
+  cli: 0,
+  redline: false,
+  history: JSON.parse(localStorage.getItem('cr_history') || '[]'),
+  checkin: localStorage.getItem('cr_checkin') || null,
+};
+
+/* =========================================================
+   ONBOARDING
+========================================================= */
+function startApp() {
+  STATE.userName = document.getElementById('userName').value.trim() || 'Atharv';
+  document.getElementById('onboarding').style.display = 'none';
+  initGauge(); initHistoryChart(); buildSliders(); recalc();
+  if (STATE.contact) document.getElementById('contactLabel').textContent = STATE.contact.name;
+  if (STATE.checkin) highlightCheckin(STATE.checkin);
+  log({ event: 'session_start', engine: 'telemetry online', mode: 'passive' }, 'sys');
+  log({ event: 'privacy', note: 'all processing local — no network calls' }, 'ok');
+}
+
+/* =========================================================
+   TELEMETRY CONSOLE
+========================================================= */
+let evtCount = 0;
+const consoleEl = () => document.getElementById('console');
+function ts() {
+  const d = new Date();
+  return d.toLocaleTimeString('en-US', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+}
+function log(obj, kind='info') {
+  const c = consoleEl(); if (!c) return;
+  evtCount++; document.getElementById('evtCount').textContent = evtCount;
+  const colors = { info:'#7dd3fc', ok:'#34d399', warn:'#fbbf24', err:'#f87171', sys:'#a78bfa' };
+  const line = document.createElement('div');
+  line.className = 'console-line whitespace-pre-wrap break-all';
+  const body = JSON.stringify(obj);
+  line.innerHTML = `<span style="color:#475569">[${ts()}]</span> <span style="color:${colors[kind]}">›</span> <span style="color:${colors[kind]}">${body}</span>`;
+  c.appendChild(line);
+  while (c.children.length > 220) c.removeChild(c.firstChild);
+  c.scrollTop = c.scrollHeight;
+}
+function clearConsole(){ consoleEl().innerHTML=''; evtCount=0; document.getElementById('evtCount').textContent=0; }
+
+/* =========================================================
+   METRIC 1: CONTEXT SWITCHING
+========================================================= */
+window.addEventListener('blur', () => {
+  STATE.telemetry.lastFocusOut = Date.now();
+});
+window.addEventListener('focus', () => {
+  if (!STATE.telemetry.lastFocusOut) return;
+  const away = Date.now() - STATE.telemetry.lastFocusOut;
+  STATE.telemetry.focusLosses++;
+  log({ type:'focus_change', event:'focus_loss', timestamp: Date.now(), durationAway: away, durationSec: +(away/1000).toFixed(1) }, away > 8000 ? 'warn' : 'info');
+  recalc();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    STATE.telemetry.lastFocusOut = Date.now();
+    log({ type:'visibility', state:'hidden', event:'tab_switch' }, 'warn');
+  } else {
+    log({ type:'visibility', state:'visible', event:'focus_recovery' }, 'ok');
+  }
+});
+
+/* =========================================================
+   METRIC 2: DELETE SPIKE DETECTION
+========================================================= */
+let deleteWindow = [];
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('onboarding').style.display === 'none') {
+    STATE.telemetry.keystrokes++;
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      STATE.telemetry.deletes++;
+      deleteWindow.push(Date.now());
+    }
+    deleteWindow = deleteWindow.filter(t => Date.now() - t < 4000);
+    // spike: many deletes in short window
+    if (deleteWindow.length === 6) {
+      const ratio = STATE.telemetry.deletes / Math.max(STATE.telemetry.keystrokes,1);
+      const sev = ratio > 0.35 ? 'high' : ratio > 0.2 ? 'medium' : 'low';
+      log({ type:'delete_spike', ratio:+ratio.toFixed(2), burst: deleteWindow.length, severity: sev }, sev==='high'?'err':'warn');
+    }
+    updateLiveMetrics();
+  }
+});
+
+/* =========================================================
+   METRIC 3: MICRO-STUTTERING (mouse + idle)
+========================================================= */
+let lastMove = { x:0, y:0, t:Date.now() };
+let lastActivity = Date.now();
+let velocities = [];
+document.addEventListener('mousemove', (e) => {
+  const now = Date.now();
+  const dt = now - lastMove.t || 1;
+  const dist = Math.hypot(e.clientX - lastMove.x, e.clientY - lastMove.y);
+  const v = dist / dt;
+  velocities.push(v);
+  if (velocities.length > 40) velocities.shift();
+  // erratic = high variance acceleration
+  if (velocities.length > 8) {
+    const mean = velocities.reduce((a,b)=>a+b,0)/velocities.length;
+    const variance = velocities.reduce((a,b)=>a+(b-mean)**2,0)/velocities.length;
+    STATE.telemetry.stutterIdx = Math.min(10, variance * 4);
+  }
+  lastMove = { x:e.clientX, y:e.clientY, t:now };
+  lastActivity = now;
+});
+document.addEventListener('keydown', ()=> lastActivity = Date.now());
+
+// idle detector
+setInterval(() => {
+  const idle = Date.now() - lastActivity;
+  if (idle > 12000 && document.getElementById('onboarding').style.display === 'none') {
+    STATE.telemetry.idleEvents++;
+    log({ type:'micro_stutter', event:'idle_period', idleSec: +(idle/1000).toFixed(1), note:'attention gap detected' }, 'warn');
+    lastActivity = Date.now();
+    recalc();
+  }
+  updateLiveMetrics();
+}, 3000);
+
+// occasional stutter event when index high
+setInterval(() => {
+  if (STATE.telemetry.stutterIdx > 4 && Math.random() > 0.5) {
+    log({ type:'micro_stutter', event:'erratic_cursor', stutterIdx:+STATE.telemetry.stutterIdx.toFixed(2), severity: STATE.telemetry.stutterIdx>6?'high':'medium' }, STATE.telemetry.stutterIdx>6?'err':'warn');
+  }
+}, 5000);
+
+/* =========================================================
+   METRIC 4: SESSION INTENSITY
+========================================================= */
+function sessionMinutes(){ return Math.floor((Date.now()-STATE.telemetry.sessionStart)/60000); }
+
+function updateLiveMetrics() {
+  const t = STATE.telemetry;
+  document.getElementById('mFocus').textContent = t.focusLosses;
+  const ratio = t.keystrokes ? Math.round((t.deletes/t.keystrokes)*100) : 0;
+  document.getElementById('mDelete').textContent = ratio + '%';
+  document.getElementById('mSession').textContent = sessionMinutes();
+  document.getElementById('mStutter').textContent = t.stutterIdx.toFixed(1);
+}
+
+/* =========================================================
+   CLI CALCULATOR
+========================================================= */
+function rawCLI(m) {
+  return (m.complexity * m.workHours * m.assignments * m.deadline * m.stress) / Math.max(m.sleep, 1);
+}
+function normalizeCLI(raw) {
+  // map raw (theoretical max ~ 10*12*30*10*10 / 1 huge) — use log-ish scaling for sane 0-100
+  // practical scaling: divide by a reference and clamp
+  const scaled = Math.min(100, Math.round(Math.sqrt(raw) * 1.9));
+  return scaled;
+}
+function behavioralBoost() {
+  const t = STATE.telemetry;
+  let b = 0;
+  b += Math.min(15, t.focusLosses * 2);                       // context switching
+  const dr = t.keystrokes ? t.deletes/t.keystrokes : 0;
+  b += Math.min(15, dr * 40);                                  // delete ratio
+  b += Math.min(10, t.idleEvents * 2);                         // attention gaps
+  b += Math.min(10, t.stutterIdx);                             // micro-stutter
+  return Math.round(b);
+}
+
+function recalc() {
+  const base = normalizeCLI(rawCLI(STATE.model));
+  const boost = behavioralBoost();
+  const cli = Math.min(100, base + boost);
+  STATE.cli = cli;
+  renderCLI(cli);
+  pushHistory(cli);
+  updateLiveMetrics();
+  evaluateFaults();
+  if (cli > 75 && !STATE.redline) enterRedline();
+  if (cli <= 70 && STATE.redline) exitRedline();
+}
+
+/* =========================================================
+   RENDER CLI + GAUGE
+========================================================= */
+let gaugeChart, historyChart;
+function colorFor(v){ return v <= 40 ? '#22c55e' : v <= 70 ? '#f59e0b' : '#ef4444'; }
+function colorSoft(v){ return v <= 40 ? 'rgba(34,197,94,0.15)' : v <= 70 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)'; }
+
+function initGauge() {
+  const ctx = document.getElementById('gauge').getContext('2d');
+  gaugeChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { datasets: [{ data:[0,100], backgroundColor:['#22c55e','rgba(148,163,184,0.12)'], borderWidth:0, circumference:270, rotation:225 }] },
+    options: { cutout:'78%', animation:{duration:600, easing:'easeOutQuart'}, plugins:{tooltip:{enabled:false},legend:{display:false}}, responsive:false }
+  });
+}
+function renderCLI(v) {
+  const valEl = document.getElementById('cliValue');
+  valEl.textContent = v;
+  valEl.style.color = colorFor(v);
+  if (gaugeChart) {
+    gaugeChart.data.datasets[0].data = [v, 100 - v];
+    gaugeChart.data.datasets[0].backgroundColor = [colorFor(v), 'rgba(148,163,184,0.12)'];
+    gaugeChart.update();
+  }
+  // headline + badges
+  let label, head, sub, pill;
+  if (v <= 40) { label='OPTIMAL'; head='Cognitive state: Healthy'; sub='All systems operating within safe parameters. Keep the rhythm.'; }
+  else if (v <= 70) { label='ELEVATED'; head='Cognitive state: Strained'; sub='Load is climbing. Consider a short break or reducing parallel tasks.'; }
+  else { label='REDLINE'; head='Cognitive state: Overload'; sub='Critical saturation detected. Intervention protocols engaging.'; }
+
+  const badge = document.getElementById('cliStatusBadge');
+  badge.textContent = label;
+  badge.style.color = colorFor(v);
+  badge.style.borderColor = colorFor(v)+'55';
+  badge.style.background = colorSoft(v);
+
+  const head_el = document.getElementById('cliHeadline');
+  head_el.textContent = head; head_el.style.color = colorFor(v);
+  document.getElementById('cliSub').textContent = sub;
+
+  // top system pill
+  const sp = document.getElementById('systemStatusPill');
+  if (v <= 40) { sp.className='text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5'; sp.innerHTML='<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span> SYSTEM NOMINAL'; }
+  else if (v <= 70) { sp.className='text-[11px] font-mono px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5'; sp.innerHTML='<span class="w-1.5 h-1.5 rounded-full bg-amber-400 pulse-dot"></span> LOAD ELEVATED'; }
+  else { sp.className='text-[11px] font-mono px-2.5 py-1 rounded-full bg-red-500/15 text-red-300 border border-red-500/30 flex items-center gap-1.5 fault-flash'; sp.innerHTML='<span class="w-1.5 h-1.5 rounded-full bg-red-400 pulse-dot"></span> COGNITIVE REDLINE'; }
+}
+
+/* =========================================================
+   HISTORY CHART
+========================================================= */
+function initHistoryChart() {
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  historyChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels: STATE.history.map((_,i)=>i), datasets:[{ data:[...STATE.history], borderColor:'#38bdf8', backgroundColor:'rgba(56,189,248,0.12)', fill:true, tension:0.4, pointRadius:0, borderWidth:2 }]},
+    options:{ responsive:true, maintainAspectRatio:false, animation:{duration:300}, scales:{ y:{min:0,max:100, grid:{color:'rgba(148,163,184,0.08)'}, ticks:{color:'#64748b',font:{size:9}}}, x:{display:false}}, plugins:{legend:{display:false},tooltip:{enabled:false}} }
+  });
+}
+let histThrottle = 0;
+function pushHistory(v) {
+  const now = Date.now();
+  if (now - histThrottle < 800) { // still update last point live
+    if (STATE.history.length) STATE.history[STATE.history.length-1] = v;
+  } else {
+    histThrottle = now;
+    STATE.history.push(v);
+  }
+  if (STATE.history.length > 40) STATE.history.shift();
+  localStorage.setItem('cr_history', JSON.stringify(STATE.history));
+  if (historyChart) {
+    historyChart.data.labels = STATE.history.map((_,i)=>i);
+    historyChart.data.datasets[0].data = [...STATE.history];
+    historyChart.update();
+  }
+}
+
+/* =========================================================
+   FAULT CODES
+========================================================= */
+const FAULTS = {
+  ERR_COGNITIVE_SATURATION:   { test: () => STATE.cli > 75, msg:'Total load exceeds safe operating threshold.' },
+  ERR_CONTEXT_THRASHING:      { test: () => STATE.telemetry.focusLosses >= 4, msg:'Excessive tab/focus switching detected.' },
+  ERR_SLEEP_DEPRIVATION:      { test: () => STATE.model.sleep <= 4, msg:'Recovery input critically low (<5h sleep).' },
+  ERR_ATTENTION_FRAGMENTATION:{ test: () => STATE.telemetry.idleEvents >= 2 || STATE.telemetry.stutterIdx > 5, msg:'Fragmented attention / motor micro-stuttering.' },
+  ERR_EDIT_INSTABILITY:       { test: () => STATE.telemetry.keystrokes>20 && (STATE.telemetry.deletes/STATE.telemetry.keystrokes) > 0.3, msg:'High deletion ratio — rewrite loop detected.' },
+};
+let activeFaults = new Set();
+function evaluateFaults() {
+  const panel = document.getElementById('faultPanel');
+  const current = [];
+  for (const [code, f] of Object.entries(FAULTS)) {
+    if (f.test()) {
+      current.push(code);
+      if (!activeFaults.has(code)) { activeFaults.add(code); log({ FAULT_CODE: code, status:'RAISED', detail:f.msg }, 'err'); }
+    } else {
+      if (activeFaults.has(code)) { activeFaults.delete(code); log({ FAULT_CODE: code, status:'CLEARED' }, 'ok'); }
+    }
+  }
+  if (!current.length) { panel.classList.add('hidden'); panel.innerHTML=''; return; }
+  panel.classList.remove('hidden');
+  panel.innerHTML = current.map(code => `
+    <div class="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 fault-flash">
+      <span class="text-red-400 text-xs">⚠</span>
+      <span class="font-mono text-[11px] text-red-300 font-bold">FAULT · ${code}</span>
+      <span class="text-[10px] text-slate-400 hidden sm:inline">${FAULTS[code].msg}</span>
+    </div>`).join('');
+}
+
+/* =========================================================
+   REDLINE EVENT
+========================================================= */
+function enterRedline() {
+  STATE.redline = true;
+  document.body.classList.add('redline');
+  log({ event:'COGNITIVE_REDLINE', status:'TRIGGERED', cli: STATE.cli, action:'engaging interventions' }, 'err');
+  lockControls(true);
+  showDecomp();
+  // intervention if contact + status implies red
+  triggerIntervention();
+}
+function exitRedline() {
+  STATE.redline = false;
+  document.body.classList.remove('redline');
+  lockControls(false);
+  log({ event:'COGNITIVE_REDLINE', status:'RESOLVED', cli: STATE.cli }, 'ok');
+}
+function lockControls(on) {
+  const card = document.getElementById('modelCard');
+  const addBtn = document.getElementById('addTaskBtn');
+  if (on) {
+    addBtn.disabled = true;
+    addBtn.innerHTML = '[ CRITICAL OVERLOAD ]';
+    addBtn.className = 'px-4 py-2 rounded-lg bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-mono font-bold cursor-not-allowed';
+    document.getElementById('taskList').classList.add('locked');
+  } else {
+    addBtn.disabled = false;
+    addBtn.innerHTML = '+ Add Task';
+    addBtn.className = 'px-4 py-2 rounded-lg bg-sky-500/90 hover:bg-sky-500 text-sm font-semibold transition';
+    document.getElementById('taskList').classList.remove('locked');
+  }
+}
+
+/* =========================================================
+   DECOMPRESSION MODAL
+========================================================= */
+let decompTimer;
+function showDecomp() {
+  const modal = document.getElementById('decompModal');
+  modal.style.display = 'flex';
+  let n = 30;
+  document.getElementById('decompCount').textContent = n;
+  const skip = document.getElementById('decompSkip');
+  skip.disabled = true; skip.className='text-xs px-4 py-2 rounded-lg border border-slate-600 text-slate-400 opacity-40 cursor-not-allowed';
+  const breathPhases = ['Breathe in…','Hold…','Breathe out…','Hold…'];
+  let bi = 0;
+  const breathInt = setInterval(()=>{ document.getElementById('breathText').textContent = breathPhases[bi++ % 4]; }, 4000);
+  document.getElementById('breathText').textContent = breathPhases[0];
+  clearInterval(decompTimer);
+  decompTimer = setInterval(() => {
+    n--;
+    document.getElementById('decompCount').textContent = n;
+    if (n <= 0) {
+      clearInterval(decompTimer); clearInterval(breathInt);
+      skip.disabled = false;
+      skip.className='text-xs px-4 py-2 rounded-lg border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10 transition';
+      skip.textContent = 'Resume — I\'m ready ✓';
+      log({ event:'decompression', status:'complete', duration:30 }, 'ok');
+    }
+  }, 1000);
+}
+function closeDecomp() {
+  if (document.getElementById('decompSkip').disabled) return;
+  document.getElementById('decompModal').style.display = 'none';
+}
+
+/* =========================================================
+   INTERVENTION (CLOSE THE LOOP)
+========================================================= */
+function triggerIntervention() {
+  if (!STATE.contact) return;
+  const name = STATE.userName;
+  document.getElementById('interventionMsg').textContent = `${name} may need support today. Consider checking in.`;
+  setTimeout(()=> {
+    document.getElementById('interventionCard').style.display = 'block';
+    log({ event:'intervention', to: STATE.contact.name, relationship: STATE.contact.relationship, payload:'STATUS_RED_ONLY', private_data:'NONE' }, 'sys');
+  }, 1200);
+}
+
+/* =========================================================
+   DAILY CHECK-IN
+========================================================= */
+function setCheckin(color) {
+  STATE.checkin = color;
+  localStorage.setItem('cr_checkin', color);
+  highlightCheckin(color);
+  log({ event:'daily_checkin', status: color.toUpperCase(), shared_with_contact: STATE.contact ? STATE.contact.name : 'none', data_shared:'color_only' }, color==='red'?'err':color==='yellow'?'warn':'ok');
+  if (color === 'red') triggerIntervention();
+}
+function highlightCheckin(color) {
+  document.querySelectorAll('.checkin-btn').forEach(b=>{ b.style.borderColor=''; b.style.boxShadow=''; b.style.background=''; });
+  const el = document.getElementById('ci-'+color);
+  const c = color==='green'?'#22c55e':color==='yellow'?'#f59e0b':'#ef4444';
+  el.style.borderColor = c; el.style.boxShadow = `0 0 12px ${c}88`; el.style.background = c+'22';
+}
+
+/* =========================================================
+   CONTACT
+========================================================= */
+function openContactModal(){ document.getElementById('contactModal').style.display='flex'; if(STATE.contact){document.getElementById('contactName').value=STATE.contact.name; document.getElementById('contactRel').value=STATE.contact.relationship;} }
+function saveContact() {
+  const name = document.getElementById('contactName').value.trim();
+  if (!name) return;
+  STATE.contact = { name, relationship: document.getElementById('contactRel').value };
+  localStorage.setItem('cr_contact', JSON.stringify(STATE.contact));
+  document.getElementById('contactLabel').textContent = name;
+  document.getElementById('contactModal').style.display='none';
+  log({ event:'contact_configured', name, relationship: STATE.contact.relationship, storage:'localStorage', backend:'none' }, 'sys');
+}
+
+/* =========================================================
+   SLIDERS / MODEL
+========================================================= */
+function buildSliders() {
+  document.querySelectorAll('.slider-wrap').forEach(w => {
+    const id = w.dataset.id, min=w.dataset.min, max=w.dataset.max;
+    const val = STATE.model[id];
+    w.innerHTML = `<label class="text-xs text-slate-400 flex justify-between mb-1">${w.querySelector('label').textContent} <span id="v-${id}" class="font-mono text-sky-300">${val}</span></label>
+      <input type="range" min="${min}" max="${max}" value="${val}" data-id="${id}" class="w-full model-slider" />`;
+  });
+  document.querySelectorAll('.model-slider').forEach(s => {
+    s.addEventListener('input', e => {
+      const id = e.target.dataset.id;
+      STATE.model[id] = +e.target.value;
+      document.getElementById('v-'+id).textContent = e.target.value;
+      localStorage.setItem('cr_model', JSON.stringify(STATE.model));
+      log({ event:'model_input', param:id, value:+e.target.value }, 'info');
+      recalc();
+    });
+  });
+}
+function onAssignInput() {
+  STATE.model.assignments = +document.getElementById('assignNum').value || 0;
+  document.getElementById('assignVal').textContent = STATE.model.assignments;
+  localStorage.setItem('cr_model', JSON.stringify(STATE.model));
+  recalc();
+}
+
+/* =========================================================
+   TASKS
+========================================================= */
+let tasks = JSON.parse(localStorage.getItem('cr_tasks')||'[]');
+function renderTasks() {
+  const el = document.getElementById('taskList');
+  el.innerHTML = tasks.map((t,i)=>`
+    <div class="flex items-center gap-2 bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2">
+      <input type="checkbox" ${t.done?'checked':''} onchange="toggleTask(${i})" class="accent-sky-500" />
+      <span class="flex-1 text-sm ${t.done?'line-through text-slate-500':''}">${t.text}</span>
+      <button onclick="delTask(${i})" class="text-slate-500 hover:text-red-400 text-xs">✕</button>
+    </div>`).join('') || '<div class="text-xs text-slate-500 text-center py-6">No assignments yet.</div>';
+}
+function addTask() {
+  if (document.getElementById('addTaskBtn').disabled) return;
+  const inp = document.getElementById('taskInput');
+  if (!inp.value.trim()) return;
+  tasks.push({ text: inp.value.trim(), done:false });
+  inp.value=''; saveTasks();
+  log({ event:'task_added', total: tasks.length }, 'info');
+}
+function toggleTask(i){ tasks[i].done=!tasks[i].done; saveTasks(); }
+function delTask(i){ tasks.splice(i,1); saveTasks(); }
+function saveTasks(){ localStorage.setItem('cr_tasks', JSON.stringify(tasks)); renderTasks(); }
+
+/* =========================================================
+   TABS
+========================================================= */
+document.querySelectorAll('.ws-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.ws-tab').forEach(x=>{ x.classList.remove('tab-active'); x.classList.add('text-slate-400'); });
+    t.classList.add('tab-active'); t.classList.remove('text-slate-400');
+    document.querySelectorAll('.ws-panel').forEach(p=>p.classList.add('hidden'));
+    document.querySelector(`[data-panel="${t.dataset.tab}"]`).classList.remove('hidden');
+    if (t.dataset.tab==='tasks') renderTasks();
+  });
+});
+
+/* =========================================================
+   SIMULATE BURNOUT
+========================================================= */
+function simulateBurnout() {
+  log({ event:'DEMO', action:'SIMULATE_BURNOUT_EVENT', note:'injecting synthetic overload telemetry' }, 'sys');
+  // crank model
+  STATE.model = { complexity:9, workHours:11, sleep:3, deadline:9, stress:9, assignments:7 };
+  localStorage.setItem('cr_model', JSON.stringify(STATE.model));
+  document.getElementById('assignNum').value = 7;
+  document.getElementById('assignVal').textContent = 7;
+  buildSliders();
+  // inject behavioral telemetry
+  STATE.telemetry.focusLosses += 6;
+  STATE.telemetry.keystrokes += 120;
+  STATE.telemetry.deletes += 52;
+  STATE.telemetry.idleEvents += 3;
+  STATE.telemetry.stutterIdx = 8.2;
+  // stream a burst of synthetic events
+  const burst = [
+    ['focus_change', {type:'focus_change', durationAway:14200, event:'focus_loss'}, 'warn'],
+    ['delete_spike', {type:'delete_spike', ratio:0.43, severity:'high'}, 'err'],
+    ['micro_stutter', {type:'micro_stutter', event:'erratic_cursor', stutterIdx:8.2, severity:'high'}, 'err'],
+    ['micro_stutter', {type:'micro_stutter', event:'idle_period', idleSec:18.5}, 'warn'],
+    ['session', {type:'session_intensity', consecutiveHrs:11, breaks:0, status:'critical'}, 'err'],
+  ];
+  burst.forEach((b,i)=> setTimeout(()=> log(b[1], b[2]), i*220));
+  // set red checkin
+  setTimeout(()=> setCheckin('red'), 1400);
+  setTimeout(()=> recalc(), 1300);
+}
+
+/* =========================================================
+   RESET
+========================================================= */
+function resetCalm() {
+  STATE.model = { complexity:4, workHours:2, sleep:8, deadline:3, stress:3, assignments:2 };
+  STATE.telemetry.focusLosses=0; STATE.telemetry.keystrokes=0; STATE.telemetry.deletes=0;
+  STATE.telemetry.idleEvents=0; STATE.telemetry.stutterIdx=0;
+  localStorage.setItem('cr_model', JSON.stringify(STATE.model));
+  document.getElementById('assignNum').value = 2; document.getElementById('assignVal').textContent=2;
+  buildSliders();
+  document.getElementById('decompModal').style.display='none';
+  document.getElementById('interventionCard').style.display='none';
+  clearInterval(decompTimer);
+  exitRedline();
+  recalc();
+  log({ event:'system_reset', status:'restored to baseline' }, 'ok');
+}
+
+/* periodic session tick */
+setInterval(()=> { if (document.getElementById('onboarding').style.display==='none') recalc(); }, 6000);
+</script>
+</body>
+</html>
